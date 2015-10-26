@@ -1,127 +1,47 @@
-# Zynq DMA Linux Driver
+# Use XDMA in PetaLinux
 
-This Linux driver has been developed to run on the Xilinx Zynq FPGA. It is a
-wrapper driver used to talk to the low level Xilinx driver (xilinx_axidma.c)
-that interfaces to a Xilinx DMA Engine implemented in the PL section of the
-Zynq FPGA. Userspace applications uses this wrapper driver to configure and
-control the DMA operations.
+```
+# Create PetaLinux Project
+petalinux-create -t project -n petalinux-2014.4
 
+# Import Vivado Project Settings
+# Please copy Vivado exported hdf file to current folder
+cd petalinux-2014.4
+petalinux-config --get-hw-description=./
 
-## Compile
+# Create Components
+petalinux-create -t modules -n xdma-dev --enable
+petalinux-create -t libs -n xdma-lib --enable
+petalinux-create -t apps -n xdma-app --enable
 
-Kernel modules need to be built against the version of the kernel it will be
-inserted in. It is recommended to uses the Linux kernel maintained by Xilinx.
+# Copy source files
+cp ../dev/*.c ../dev/*.h components/modules/xdma-dev/
+cp ../lib/*.c ../lib/*.h components/libs/xdma-lib/
+cp ../demo/xdma-app.c components/apps/xdma-app/
 
-``` bash
-git clone https://github.com/Xilinx/linux-xlnx.git
+# Update Makefile. Use the ones in this repo
+
+# Build petalinux
+petalinux-build
+
+# Package
+petalinux-package --boot --fsbl images/linux/zynq_fsbl.elf --fpga subsystems/linux/hw-description/design_1_wrapper.bit --u-boot
+
+# Test
+# Copy BOOT.BIN and image.ub to SD card
 ```
 
-It has been tested to work with the linux-xlnx master-next merge tag 'v3.15'
-(commit 40dde7e248951426abcba254e7e070f209005afb).
-
-The driver module can be compiling outside of the Linux kernel source tree. A
-variable 'KDIR' in the Makefile is used to point to the kernel source
-directory. The default value has it pointing to the default Linux install
-location for kernel sources. However, if cross compiling or if the sources are
-in a non-default location the value can be overridden using an exported
-environmental variable or as an argument passes into the make command.
-
-```bash
-cd zynq-xdma/dev/
-export KDIR=../../linux-xlnx
-make
+## Test on Target ##
 ```
+# Login as root
 
-or
+# Find the xdma related files
+find / -name "xdma*"
 
-```bash
-cd zynq-xdma/dev/
-make KDIR=../../linux-xlnx
+# Insert xdma kernel module
+insmod /lib/modules/3.17.0-xilinx/extra/xdma.ko
+
+# Execute the demo
+/bin/xdma-app
+
 ```
-
-## Cross Compiling
-
-A cross compile tool chain is installed onto your system with the Xilinx SDK.
-Once Xilinx is installed, export the following environmental variables and
-afterwards invoking "make" will cross compile the library's and applications in
-this repo.
-
-```bash
-export PATH=/opt/Xilinx/SDK/2014.4/gnu/arm/lin/bin:$PATH
-export CROSS_COMPILE=arm-xilinx-linux-gnueabi-
-export ARCH=arm
-```
-
-## Compile Order
-
-Compile directories in that order
-First : /dev
-Second : /lib
-Third : /demo
-
-
-## Inserting Module
-
-Use of the driver module requires it to be inserted into the running Linux
-kernel. Once inserted it will automatically create a character device file in
-'/dev' called '/dev/xdma'. However, the default permissions will not allow
-non-root users to read/write to the file. These permissions can be overridden
-by installing the udev rule file found in this projects 'util' directory into
-the systems '/etc/udev/rules.d/' directory. Alternatively, once the modules
-inserted the permissions can be changed manually using 'chmod'.
-
-```bash
-sudo cp util/80-xdma.rules /etc/udev/rules.d/
-sudo insmod dev/xdma.ko
-```
-
-or
-
-```bash
-sudo insmod xdma.ko && sudo chmod 666 /dev/xdma
-```
-
-To remove the module.
-
-```bash
-sudo rmmod xdma
-```
-
-To install the module and have it loaded at boot, first install the udev rule
-as shown above and then follow the below instructions.
-
-```bash
-sudo mkdir -p /lib/modules/$(uname -r)/extra/
-sudo cp xdma.ko /lib/modules/$(uname -r)/extra/
-sudo depmod -a
-sudo modprobe xdma
-sudo sh -c 'echo "xdma" >> /etc/modules'
-```
-
-
-## Compiling and Running Demo
-
-The demo application assumes that you have the Zynq PL configured as a DMA
-loopback device and that it is being compiled on the Zedboard.
-
-```bash
-cd demo
-make
-```
-
-
-## Tips for getting working hardware
-
-When defining the DMA engine for the hardware, set the width of the buffer
-length register to 23 bits. (Double click on the DMA core in Vivado IP
-integrator).
-
-A simple PlanAhead project for a Zedboard hardware loopback system that can be
-used with the driver can be found:
-https://github.com/bmartini/zedboard-simple-loopback It includes a working
-devicetree source file.
-
-If the error "<xdma> Error: allocating dma memory failed" is generated, check
-when compiling the Linux kernel that Contiguous Memory Allocator (CMA) is built
-in. In 'make menuconfig' you can find it in 'Device Drivers -> Generic Driver
-Options' under 'Contiguous Memory Allocator'. Or in ".config" CONFIG_DMA_CMA=y.

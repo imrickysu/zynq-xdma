@@ -1,0 +1,14 @@
+###############################################################################
+# Please modify this file if you want to configure your own application.
+# You can uncommon and/or change the following Kconfig elements.
+###############################################################################
+
+
+if ROOTFS_COMPONENT_APPS_NAME_XDMA__APP
+	comment "No additional options for XDMA__APP"
+
+# 	config APPS_XDMA__APP_OPTION0
+#	bool "option0"
+#	help
+#	  Help text
+endif
